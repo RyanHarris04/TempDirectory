@@ -292,11 +292,23 @@ function TrailDetail(props) {
 // ───────────────────────────────── TrailDirectory (existing list + big map) ─────────────────────────────────
 function TrailDirectory() {
   const [stateFilter, setStateFilter] = React.useState("All");
+  const [bikingFilter, setBikingFilter] = React.useState("None");
+  const [equestrianFilter, setEquestrianFilter] = React.useState("None");
+  const [wheelchairFilter, setWheelchairFilter] = React.useState("None");
+  const [petsFilter, setPetsFilter] = React.useState("None");
+
+  
+  const [lengthOp, setLengthOp] = React.useState("None");   
+  const [lengthValue, setLengthValue] = React.useState(""); 
+
+  const [eGainOp, setEGainOp] = React.useState("None");     
+  const [eGainValue, setEGainValue] = React.useState("");   
   const [selectedTrail, setSelectedTrail] = React.useState(null);
   const mapRef = React.useRef(null);
   const graphicsLayerRef = React.useRef(null);
 
   const filtered = trails.filter(t => {
+   
     let stateMatch = false;
     if (stateFilter === "All") stateMatch = true;
     else if (stateFilter === "TX" && trailData.TX.includes(t)) stateMatch = true;
@@ -304,8 +316,49 @@ function TrailDirectory() {
     else if (stateFilter === "OK" && trailData.OK.includes(t)) stateMatch = true;
     else if (stateFilter === "KA" && trailData.KA.includes(t)) stateMatch = true;
 
-    return stateMatch;
+    if (!stateMatch) return false;
+
+   
+    const matchYesNo = (value, filter) => {
+      
+      if (filter === "None") return true;
+      if (!value) return false; 
+      return value.toLowerCase() === filter.toLowerCase(); 
+    };
+
+   
+    if (!matchYesNo(t.isBiking, bikingFilter)) return false;
+    if (!matchYesNo(t.isEquestrian, equestrianFilter)) return false;
+    if (!matchYesNo(t.isWheelchair, wheelchairFilter)) return false;
+    if (!matchYesNo(t.isPet, petsFilter)) return false;
+
+    
+    const matchNumber = (value, op, targetRaw) => {
+      
+      if (op === "None" || targetRaw === "") return true;
+
+      const target = Number(targetRaw);
+      if (isNaN(target)) return true; 
+
+      
+      if (value === -1 || value === null || value === undefined) return false;
+
+      const v = Number(value);
+
+      if (op === "<") return v < target;
+      if (op === ">") return v > target;
+      if (op === "=") return v === target;
+
+      return true;
+    };
+
+    
+    if (!matchNumber(t.length, lengthOp, lengthValue)) return false;
+    if (!matchNumber(t.eGain, eGainOp, eGainValue)) return false;
+
+    return true;
   });
+
 
   // Initialize map (same idea as before)
   React.useEffect(() => {
@@ -353,7 +406,7 @@ function TrailDirectory() {
     });
   }, []);
 
-  // Update markers when the filter changes
+  
   React.useEffect(() => {
     if (!graphicsLayerRef.current) return;
 
@@ -395,6 +448,8 @@ function TrailDirectory() {
   return (
     React.createElement("div", null,
       React.createElement("div", { id: "filters" },
+
+        
         React.createElement("label", null, "State: ",
           React.createElement("select", {
             value: stateFilter,
@@ -406,8 +461,99 @@ function TrailDirectory() {
             React.createElement("option", null, "OK"),
             React.createElement("option", null, "KA")
           )
+        ),
+  
+        
+        React.createElement("label", null, " Biking: ",
+          React.createElement("select", {
+            value: bikingFilter,
+            onChange: function (e) { setBikingFilter(e.target.value); }
+          },
+            React.createElement("option", null, "None"),
+            React.createElement("option", null, "Yes"),
+            React.createElement("option", null, "No")
+          )
+        ),
+  
+        
+        React.createElement("label", null, " Equestrian: ",
+          React.createElement("select", {
+            value: equestrianFilter,
+            onChange: function (e) { setEquestrianFilter(e.target.value); }
+          },
+            React.createElement("option", null, "None"),
+            React.createElement("option", null, "Yes"),
+            React.createElement("option", null, "No")
+          )
+        ),
+  
+        
+        React.createElement("label", null, " Wheelchair: ",
+          React.createElement("select", {
+            value: wheelchairFilter,
+            onChange: function (e) { setWheelchairFilter(e.target.value); }
+          },
+            React.createElement("option", null, "None"),
+            React.createElement("option", null, "Yes"),
+            React.createElement("option", null, "No")
+          )
+        ),
+  
+        
+        React.createElement("label", null, " Pets: ",
+          React.createElement("select", {
+            value: petsFilter,
+            onChange: function (e) { setPetsFilter(e.target.value); }
+          },
+            React.createElement("option", null, "None"),
+            React.createElement("option", null, "Yes"),
+            React.createElement("option", null, "No")
+          )
+        ),
+  
+        
+        React.createElement("label", null, " Length: ",
+          React.createElement("select", {
+            value: lengthOp,
+            onChange: function (e) { setLengthOp(e.target.value); }
+          },
+            React.createElement("option", { value: "None" }, "None"),
+            React.createElement("option", { value: "<" }, "Less than"),
+            React.createElement("option", { value: ">" }, "Greater than"),
+            React.createElement("option", { value: "=" }, "Equal to")
+          ),
+          React.createElement("input", {
+            type: "number",
+            value: lengthValue,
+            onChange: function (e) { setLengthValue(e.target.value); },
+            placeholder: "miles",
+            min: "0",
+            style: { width: "70px", marginLeft: "4px" }
+          })
+        ),
+  
+        
+        React.createElement("label", null, " Elev. gain: ",
+          React.createElement("select", {
+            value: eGainOp,
+            onChange: function (e) { setEGainOp(e.target.value); }
+          },
+            React.createElement("option", { value: "None" }, "None"),
+            React.createElement("option", { value: "<" }, "Less than"),
+            React.createElement("option", { value: ">" }, "Greater than"),
+            React.createElement("option", { value: "=" }, "Equal to")
+          ),
+          React.createElement("input", {
+            type: "number",
+            value: eGainValue,
+            onChange: function (e) { setEGainValue(e.target.value); },
+            placeholder: "ft",
+            min: "0",
+            style: { width: "70px", marginLeft: "4px" }
+          })
         )
       ),
+  
       React.createElement("div", { id: "map" }),
       filtered.map(function (t, i) {
         return React.createElement("div", {
