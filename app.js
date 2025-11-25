@@ -1053,6 +1053,75 @@ function TrailDirectory() {
   const [eGainOp, setEGainOp] = React.useState("None");
   const [eGainValue, setEGainValue] = React.useState("");
   const [selectedTrail, setSelectedTrail] = React.useState(null);
+    
+    const [isFilterModalOpen, setIsFilterModalOpen] = React.useState(false);
+    const [draftStateFilter, setDraftStateFilter] = React.useState(stateFilter);
+    const [draftBikingFilter, setDraftBikingFilter] = React.useState(bikingFilter);
+    const [draftEquestrianFilter, setDraftEquestrianFilter] = React.useState(equestrianFilter);
+    const [draftWheelchairFilter, setDraftWheelchairFilter] = React.useState(wheelchairFilter);
+    const [draftPetsFilter, setDraftPetsFilter] = React.useState(petsFilter);
+    const [draftLengthOp, setDraftLengthOp] = React.useState(lengthOp);
+    const [draftLengthValue, setDraftLengthValue] = React.useState(lengthValue);
+    const [draftEGainOp, setDraftEGainOp] = React.useState(eGainOp);
+    const [draftEGainValue, setDraftEGainValue] = React.useState(eGainValue);
+      
+  const openFilters = function () {
+    setDraftStateFilter(stateFilter);
+    setDraftBikingFilter(bikingFilter);
+    setDraftEquestrianFilter(equestrianFilter);
+    setDraftWheelchairFilter(wheelchairFilter);
+    setDraftPetsFilter(petsFilter);
+
+    setDraftLengthOp(lengthOp);
+    setDraftLengthValue(lengthValue);
+    setDraftEGainOp(eGainOp);
+    setDraftEGainValue(eGainValue);
+
+    setIsFilterModalOpen(true);
+  };
+
+  
+  const applyFilters = function () {
+    setStateFilter(draftStateFilter);
+    setBikingFilter(draftBikingFilter);
+    setEquestrianFilter(draftEquestrianFilter);
+    setWheelchairFilter(draftWheelchairFilter);
+    setPetsFilter(draftPetsFilter);
+
+    setLengthOp(draftLengthOp);
+    setLengthValue(draftLengthValue);
+    setEGainOp(draftEGainOp);
+    setEGainValue(draftEGainValue);
+
+    setIsFilterModalOpen(false);
+  };
+
+  
+  const clearFilters = function () {
+    const defaultState = "All";
+
+    setStateFilter(defaultState);
+    setBikingFilter("None");
+    setEquestrianFilter("None");
+    setWheelchairFilter("None");
+    setPetsFilter("None");
+    setLengthOp("None");
+    setLengthValue("");
+    setEGainOp("None");
+    setEGainValue("");
+
+    
+    setDraftStateFilter(defaultState);
+    setDraftBikingFilter("None");
+    setDraftEquestrianFilter("None");
+    setDraftWheelchairFilter("None");
+    setDraftPetsFilter("None");
+    setDraftLengthOp("None");
+    setDraftLengthValue("");
+    setDraftEGainOp("None");
+    setDraftEGainValue("");
+  };
+
   const mapRef = React.useRef(null);
   const graphicsLayerRef = React.useRef(null);
 
@@ -1190,109 +1259,162 @@ function TrailDirectory() {
   // Otherwise show the original directory view
   return (
     React.createElement("div", null,
-      React.createElement("div", { id: "filters" },
-
-        React.createElement("label", null, "State: ",
-          React.createElement("select", {
-            value: stateFilter,
-            onChange: function (e) { setStateFilter(e.target.value); }
-          },
-            React.createElement("option", null, "All"),
-            React.createElement("option", null, "TX"),
-            React.createElement("option", null, "AR"),
-            React.createElement("option", null, "OK"),
-            React.createElement("option", null, "KA")
+          // Small bar with a single "Filters" button
+    React.createElement("div", { className: "filters-top-bar" },
+      React.createElement("button", {
+        type: "button",
+        onClick: openFilters
+      }, "Filters")
+    ),
+        
+        isFilterModalOpen && React.createElement(
+          "div",
+          { className: "modal-backdrop" },
+          React.createElement(
+            "div",
+            { className: "modal-panel" },
+    
+            React.createElement("h2", null, "Filters"),
+    
+            
+            React.createElement("div", { className: "modal-filter-row" },
+              React.createElement("label", null, "State"),
+              React.createElement("select", {
+                value: draftStateFilter,
+                onChange: function (e) { setDraftStateFilter(e.target.value); }
+              },
+                React.createElement("option", null, "All"),
+                React.createElement("option", null, "TX"),
+                React.createElement("option", null, "AR"),
+                React.createElement("option", null, "OK"),
+                React.createElement("option", null, "KA")
+              )
+            ),
+    
+          
+            React.createElement("div", { className: "modal-filter-row" },
+              React.createElement("label", null, "Biking"),
+              React.createElement("select", {
+                value: draftBikingFilter,
+                onChange: function (e) { setDraftBikingFilter(e.target.value); }
+              },
+                React.createElement("option", null, "None"),
+                React.createElement("option", null, "Yes"),
+                React.createElement("option", null, "No")
+              )
+            ),
+    
+            
+            React.createElement("div", { className: "modal-filter-row" },
+              React.createElement("label", null, "Equestrian"),
+              React.createElement("select", {
+                value: draftEquestrianFilter,
+                onChange: function (e) { setDraftEquestrianFilter(e.target.value); }
+              },
+                React.createElement("option", null, "None"),
+                React.createElement("option", null, "Yes"),
+                React.createElement("option", null, "No")
+              )
+            ),
+    
+            
+            React.createElement("div", { className: "modal-filter-row" },
+              React.createElement("label", null, "Wheelchair"),
+              React.createElement("select", {
+                value: draftWheelchairFilter,
+                onChange: function (e) { setDraftWheelchairFilter(e.target.value); }
+              },
+                React.createElement("option", null, "None"),
+                React.createElement("option", null, "Yes"),
+                React.createElement("option", null, "No")
+              )
+            ),
+    
+           
+            React.createElement("div", { className: "modal-filter-row" },
+              React.createElement("label", null, "Pets allowed"),
+              React.createElement("select", {
+                value: draftPetsFilter,
+                onChange: function (e) { setDraftPetsFilter(e.target.value); }
+              },
+                React.createElement("option", null, "None"),
+                React.createElement("option", null, "Yes"),
+                React.createElement("option", null, "No")
+              )
+            ),
+    
+            
+            React.createElement("div", { className: "modal-filter-row" },
+              React.createElement("label", null, "Trail length (miles)"),
+              React.createElement("div", null,
+                React.createElement("select", {
+                  value: draftLengthOp,
+                  onChange: function (e) { setDraftLengthOp(e.target.value); }
+                },
+                  React.createElement("option", { value: "None" }, "None"),
+                  React.createElement("option", { value: "<" }, "Less than"),
+                  React.createElement("option", { value: ">" }, "Greater than"),
+                  React.createElement("option", { value: "=" }, "Equal to")
+                ),
+                React.createElement("input", {
+                  type: "number",
+                  value: draftLengthValue,
+                  onChange: function (e) { setDraftLengthValue(e.target.value); },
+                  placeholder: "miles",
+                  min: "0",
+                  style: { width: "80px", marginLeft: "6px" }
+                })
+              )
+            ),
+    
+           
+            React.createElement("div", { className: "modal-filter-row" },
+              React.createElement("label", null, "Elevation gain (ft)"),
+              React.createElement("div", null,
+                React.createElement("select", {
+                  value: draftEGainOp,
+                  onChange: function (e) { setDraftEGainOp(e.target.value); }
+                },
+                  React.createElement("option", { value: "None" }, "None"),
+                  React.createElement("option", { value: "<" }, "Less than"),
+                  React.createElement("option", { value: ">" }, "Greater than"),
+                  React.createElement("option", { value: "=" }, "Equal to")
+                ),
+                React.createElement("input", {
+                  type: "number",
+                  value: draftEGainValue,
+                  onChange: function (e) { setDraftEGainValue(e.target.value); },
+                  placeholder: "ft",
+                  min: "0",
+                  style: { width: "80px", marginLeft: "6px" }
+                })
+              )
+            ),
+    
+           
+            React.createElement("div", { className: "modal-actions" },
+              React.createElement("button", {
+                type: "button",
+                className: "danger",
+                onClick: clearFilters
+              }, "Clear"),
+              React.createElement("button", {
+                type: "button",
+                onClick: function () { setIsFilterModalOpen(false); }
+              }, "Cancel"),
+              React.createElement("button", {
+                type: "button",
+                className: "primary",
+                onClick: applyFilters
+              }, "Apply")
+            )
           )
         ),
-
-        React.createElement("label", null, " Biking: ",
-          React.createElement("select", {
-            value: bikingFilter,
-            onChange: function (e) { setBikingFilter(e.target.value); }
-          },
-            React.createElement("option", null, "None"),
-            React.createElement("option", null, "Yes"),
-            React.createElement("option", null, "No")
-          )
-        ),
-
-        React.createElement("label", null, " Equestrian: ",
-          React.createElement("select", {
-            value: equestrianFilter,
-            onChange: function (e) { setEquestrianFilter(e.target.value); }
-          },
-            React.createElement("option", null, "None"),
-            React.createElement("option", null, "Yes"),
-            React.createElement("option", null, "No")
-          )
-        ),
-
-        React.createElement("label", null, " Wheelchair: ",
-          React.createElement("select", {
-            value: wheelchairFilter,
-            onChange: function (e) { setWheelchairFilter(e.target.value); }
-          },
-            React.createElement("option", null, "None"),
-            React.createElement("option", null, "Yes"),
-            React.createElement("option", null, "No")
-          )
-        ),
-
-        React.createElement("label", null, " Pets: ",
-          React.createElement("select", {
-            value: petsFilter,
-            onChange: function (e) { setPetsFilter(e.target.value); }
-          },
-            React.createElement("option", null, "None"),
-            React.createElement("option", null, "Yes"),
-            React.createElement("option", null, "No")
-          )
-        ),
-
-        React.createElement("label", null, " Length: ",
-          React.createElement("select", {
-            value: lengthOp,
-            onChange: function (e) { setLengthOp(e.target.value); }
-          },
-            React.createElement("option", { value: "None" }, "None"),
-            React.createElement("option", { value: "<" }, "Less than"),
-            React.createElement("option", { value: ">" }, "Greater than"),
-            React.createElement("option", { value: "=" }, "Equal to")
-          ),
-          React.createElement("input", {
-            type: "number",
-            value: lengthValue,
-            onChange: function (e) { setLengthValue(e.target.value); },
-            placeholder: "miles",
-            min: "0",
-            style: { width: "70px", marginLeft: "4px" }
-          })
-        ),
-
-        React.createElement("label", null, " Elev. gain: ",
-          React.createElement("select", {
-            value: eGainOp,
-            onChange: function (e) { setEGainOp(e.target.value); }
-          },
-            React.createElement("option", { value: "None" }, "None"),
-            React.createElement("option", { value: "<" }, "Less than"),
-            React.createElement("option", { value: ">" }, "Greater than"),
-            React.createElement("option", { value: "=" }, "Equal to")
-          ),
-          React.createElement("input", {
-            type: "number",
-            value: eGainValue,
-            onChange: function (e) { setEGainValue(e.target.value); },
-            placeholder: "ft",
-            min: "0",
-            style: { width: "70px", marginLeft: "4px" }
-          })
-        )
-      ),
+    
 
       React.createElement("div", { id: "map" }),
 
-      // trail list cards
+     
       filtered.map(function (t, i) {
         return React.createElement(
           "div",

@@ -140,6 +140,101 @@
         height: 360px;
       }
     }
+  
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+
+.modal-panel {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.3);
+  font-size: 0.9rem;
+}
+
+.modal-panel h2 {
+  margin: 0 0 10px 0;
+  font-size: 1.1rem;
+  color: #111827;
+}
+
+
+.modal-filter-row {
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modal-filter-row label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.modal-filter-row select,
+.modal-filter-row input[type="number"] {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  font-size: 0.9rem;
+  background-color: #f9fafb;
+}
+
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.modal-actions button {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f3f4f6;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.modal-actions button.primary {
+  background: #2563eb;
+  color: white;
+  border-color: #1d4ed8;
+}
+
+.modal-actions button.danger {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+
+.filters-top-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.filters-top-bar button {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
   </style>
 
   <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css">
