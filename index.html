@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trail Directory</title>
 
   <style>
@@ -28,7 +29,8 @@
 
     /* big map on directory view */
     #map {
-      height: 480px;
+      height: 50vh;
+      min-height: 480px;
       margin-bottom: 20px;
       border: 1px solid #d1d5db;
       border-radius: 12px;
@@ -138,6 +140,7 @@
     @media (max-width: 640px) {
       #map {
         height: 360px;
+        min-height: 260px;
       }
     }
   
@@ -158,6 +161,8 @@
   padding: 16px 20px;
   width: 100%;
   max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.3);
   font-size: 0.9rem;
 }
@@ -234,6 +239,64 @@
   cursor: pointer;
   font-size: 0.85rem;
 }
+@media (max-width: 640px) {
+  body {
+    padding: 12px;          
+  }
+
+  #root {
+    max-width: 100%;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+  }
+}
+/* ADD THIS: map + trail card tweaks */
+@media (max-width: 640px) {
+  #map {
+    height: 40vh;
+    min-height: 260px;
+  }
+
+  .trail-card {
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+
+  .trail-card h2 {
+    font-size: 1rem;
+  }
+
+  .trail-card p {
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+}
+
+
+@media (max-width: 640px) {
+  .filters-top-bar {
+    justify-content: center;
+  }
+
+  .filters-top-bar button {
+    width: 100%;
+    font-size: 0.95rem;
+    padding: 8px 12px;
+  }
+}
+
+
+@media (max-width: 640px) {
+  .modal-panel {
+    max-width: 95vw;
+    padding: 14px 16px;
+  }
+}
+
+
 
   </style>
 
