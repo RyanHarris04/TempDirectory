@@ -1293,11 +1293,29 @@ function TrailDirectory() {
       ],
       function (Map, MapView, Graphic, GraphicsLayer) {
         const map = new Map({ basemap: "topo-vector" });
+        // Compute initial center/zoom from all filtered trails with valid coords
+        var initCoords = filtered.filter(function (t) {
+          return t.lat !== -100 && t.long !== -200;
+        });
+        var initCenter = [-96, 35.5];
+        var initZoom = 6;
+        if (initCoords.length > 0) {
+          var iLats = initCoords.map(function (c) { return c.lat; });
+          var iLongs = initCoords.map(function (c) { return c.long; });
+          var iMinLat = Math.min.apply(null, iLats);
+          var iMaxLat = Math.max.apply(null, iLats);
+          var iMinLong = Math.min.apply(null, iLongs);
+          var iMaxLong = Math.max.apply(null, iLongs);
+          var iSpread = Math.max(iMaxLat - iMinLat, iMaxLong - iMinLong);
+          initCenter = [(iMinLong + iMaxLong) / 2, (iMinLat + iMaxLat) / 2];
+          initZoom = getZoomForSpread(iSpread);
+        }
+
         const view = new MapView({
           container: "map",
           map: map,
-          center: [-96, 35.5],
-          zoom: 6
+          center: initCenter,
+          zoom: initZoom
         });
 
         const graphicsLayer = new GraphicsLayer();
@@ -1359,29 +1377,89 @@ function TrailDirectory() {
 
     graphicsLayerRef.current.removeAll();
 
+    // Group filtered trails by project for cluster markers
+    var markerGroups = {};
     filtered.forEach(function (t) {
       if (t.lat !== -100 && t.long !== -200) {
-        require(["esri/Graphic"], function (Graphic) {
-          const point = { type: "point", longitude: t.long, latitude: t.lat };
-          const isHighlighted = highlightedProject && t.projectName === highlightedProject;
-          const symbol = {
+        if (!markerGroups[t.projectName]) {
+          markerGroups[t.projectName] = [];
+        }
+        markerGroups[t.projectName].push(t);
+      }
+    });
+
+    require(["esri/Graphic"], function (Graphic) {
+      Object.keys(markerGroups).forEach(function (projectName) {
+        var group = markerGroups[projectName];
+        var count = group.length;
+        var isHL = highlightedProject && projectName === highlightedProject;
+
+        if (isHL) {
+          // Highlighted project — show individual trailhead markers
+          group.forEach(function (t) {
+            var pt = { type: "point", longitude: t.long, latitude: t.lat };
+            var sym = {
+              type: "simple-marker",
+              color: [22, 101, 52],
+              size: "14px",
+              outline: { color: [255, 255, 255], width: 2 }
+            };
+            graphicsLayerRef.current.add(new Graphic({
+              geometry: pt,
+              symbol: sym,
+              popupTemplate: { title: projectName, content: t.areaName }
+            }));
+          });
+        } else if (count === 1) {
+          // Single trail — normal marker
+          var point = { type: "point", longitude: group[0].long, latitude: group[0].lat };
+          var symbol = {
             type: "simple-marker",
-            color: isHighlighted ? [22, 101, 52] : [45, 95, 45],
-            size: isHighlighted ? "14px" : "10px",
-            outline: { color: [255, 255, 255], width: isHighlighted ? 2 : 1 }
+            color: [45, 95, 45],
+            size: "10px",
+            outline: { color: [255, 255, 255], width: 1 }
           };
-          const popupTemplate = {
-            title: t.projectName,
-            content: t.areaName
-          };
-          const graphic = new Graphic({
+          graphicsLayerRef.current.add(new Graphic({
             geometry: point,
             symbol: symbol,
-            popupTemplate: popupTemplate
-          });
-          graphicsLayerRef.current.add(graphic);
-        });
-      }
+            popupTemplate: { title: projectName, content: group[0].areaName }
+          }));
+        } else {
+          // Multi-trail — cluster circle with count
+          var avgLat = group.reduce(function (s, t) { return s + t.lat; }, 0) / count;
+          var avgLong = group.reduce(function (s, t) { return s + t.long; }, 0) / count;
+          var clusterPt = { type: "point", longitude: avgLong, latitude: avgLat };
+
+          var circleSymbol = {
+            type: "simple-marker",
+            color: [45, 95, 45],
+            size: "26px",
+            outline: { color: [255, 255, 255], width: 2 }
+          };
+          graphicsLayerRef.current.add(new Graphic({
+            geometry: clusterPt,
+            symbol: circleSymbol,
+            popupTemplate: { title: projectName, content: count + " trails" }
+          }));
+
+          // Count label on top
+          var textSymbol = {
+            type: "text",
+            text: String(count),
+            color: [255, 255, 255],
+            font: { size: 10, weight: "bold" },
+            horizontalAlignment: "center",
+            verticalAlignment: "middle",
+            yoffset: 0,
+            xoffset: 0
+          };
+          graphicsLayerRef.current.add(new Graphic({
+            geometry: clusterPt,
+            symbol: textSymbol,
+            popupTemplate: { title: projectName, content: count + " trails" }
+          }));
+        }
+      });
     });
   }, [filtered, highlightedProject]);
 
@@ -1409,17 +1487,45 @@ function TrailDirectory() {
     return t.projectName === highlightedProject;
   });
 
-  // sort
-  displayTrails = displayTrails.slice().sort(function (a, b) {
-    if (sortBy === "name") return (a.projectName || "").localeCompare(b.projectName || "");
-    if (sortBy === "length") return (b.length || 0) - (a.length || 0);
-    if (sortBy === "elevation") return (b.eGain || 0) - (a.eGain || 0);
-    return 0;
+  // Build project groups for the grouped (browsing) view
+  var projectGroupMap = {};
+  displayTrails.forEach(function (t) {
+    if (!projectGroupMap[t.projectName]) {
+      projectGroupMap[t.projectName] = { projectName: t.projectName, trails: [] };
+    }
+    projectGroupMap[t.projectName].trails.push(t);
   });
+  var projectGroups = Object.keys(projectGroupMap).map(function (k) { return projectGroupMap[k]; });
 
-  // slice for infinite scroll
-  var totalTrails = displayTrails.length;
-  var visibleTrails = displayTrails.slice(0, visibleCount);
+  // sort
+  if (highlightedProject) {
+    // Sort individual trails within the highlighted project
+    displayTrails = displayTrails.slice().sort(function (a, b) {
+      if (sortBy === "name") return (a.areaName || "").localeCompare(b.areaName || "");
+      if (sortBy === "length") return (b.length || 0) - (a.length || 0);
+      if (sortBy === "elevation") return (b.eGain || 0) - (a.eGain || 0);
+      return 0;
+    });
+  } else {
+    // Sort project groups
+    projectGroups.sort(function (a, b) {
+      if (sortBy === "name") return (a.projectName || "").localeCompare(b.projectName || "");
+      if (sortBy === "length") {
+        var aMax = Math.max.apply(null, a.trails.map(function (t) { return t.length || 0; }));
+        var bMax = Math.max.apply(null, b.trails.map(function (t) { return t.length || 0; }));
+        return bMax - aMax;
+      }
+      if (sortBy === "elevation") {
+        var aMax = Math.max.apply(null, a.trails.map(function (t) { return t.eGain || 0; }));
+        var bMax = Math.max.apply(null, b.trails.map(function (t) { return t.eGain || 0; }));
+        return bMax - aMax;
+      }
+      return 0;
+    });
+  }
+
+  // counts for infinite scroll
+  var totalTrails = highlightedProject ? displayTrails.length : projectGroups.length;
 
   // check if any advanced filters are active (for the "All filters" chip)
   var hasAdvancedFilters = bikingFilter !== "None" || equestrianFilter !== "None" ||
@@ -1635,12 +1741,11 @@ function TrailDirectory() {
             type: "button",
             onClick: function () {
               setHighlightedProject(null);
-              if (mapRef.current) {
-                mapRef.current.goTo(
-                  { center: [-96, 35.5], zoom: 6 },
-                  { duration: 800, easing: "ease-in-out" }
-                );
-              }
+              // Zoom to fit all filtered trails
+              var allCoords = filtered.filter(function (t) {
+                return t.lat !== -100 && t.long !== -200;
+              });
+              zoomToPoints(allCoords);
             }
           }, "Show all")
         ),
@@ -1648,7 +1753,9 @@ function TrailDirectory() {
         // Trail count + sort row
         React.createElement("div", { className: "trail-meta-row" },
           React.createElement("div", { className: "trail-count" },
-            totalTrails + " trail" + (totalTrails !== 1 ? "s" : "")
+            highlightedProject
+              ? totalTrails + " trail" + (totalTrails !== 1 ? "s" : "")
+              : totalTrails + " park" + (totalTrails !== 1 ? "s" : "")
           ),
           React.createElement("div", { className: "trail-sort" },
             React.createElement("select", {
@@ -1662,72 +1769,134 @@ function TrailDirectory() {
           )
         ),
 
-        // ── Trail cards ──
-        visibleTrails.map(function (t, i) {
-          var isHL = highlightedProject && t.projectName === highlightedProject;
-          var intensityLabel = t.intensity || "Unknown";
+        // ── Cards ──
+        highlightedProject
+          ? // Individual trail cards when a project is selected
+            displayTrails.slice(0, visibleCount).map(function (t, i) {
+              var intensityLabel = t.intensity || "Unknown";
 
-          // build access tags
-          var tags = [];
-          if (t.isWalking === "Yes") tags.push({ label: "Walking", yes: true });
-          if (t.isBiking === "Yes") tags.push({ label: "Biking", yes: true });
-          if (t.isEquestrian === "Yes") tags.push({ label: "Equestrian", yes: true });
-          if (t.isWheelchair === "Yes") tags.push({ label: "Wheelchair", yes: true });
-          if (t.isPet === "Yes") tags.push({ label: "Pets", yes: true });
+              // build access tags
+              var tags = [];
+              if (t.isWalking === "Yes") tags.push({ label: "Walking", yes: true });
+              if (t.isBiking === "Yes") tags.push({ label: "Biking", yes: true });
+              if (t.isEquestrian === "Yes") tags.push({ label: "Equestrian", yes: true });
+              if (t.isWheelchair === "Yes") tags.push({ label: "Wheelchair", yes: true });
+              if (t.isPet === "Yes") tags.push({ label: "Pets", yes: true });
 
-          return React.createElement(
-            "div",
-            {
-              key: i,
-              className: "trail-card" + (isHL ? " highlighted" : ""),
-              onClick: function () { zoomToTrail(t); }
-            },
+              return React.createElement(
+                "div",
+                {
+                  key: i,
+                  className: "trail-card highlighted"
+                },
 
-            // Title
-            React.createElement("h2", null, t.projectName || "Unnamed Trail"),
+                // Title (area name, since project name is in the "Show all" bar)
+                React.createElement("h2", null, t.areaName || t.projectName || "Unnamed Trail"),
 
-            // Area
-            React.createElement("div", { className: "card-area" }, t.areaName || ""),
+                // Stats row: badge + length + elev
+                React.createElement("div", { className: "card-stats" },
+                  React.createElement("span", { className: badgeClass(t.intensity) }, intensityLabel),
+                  React.createElement("span", { className: "stat-sep" }, "\u00b7"),
+                  React.createElement("span", null, t.length !== -1 ? t.length + " mi" : "-- mi"),
+                  React.createElement("span", { className: "stat-sep" }, "\u00b7"),
+                  React.createElement("span", null, t.eGain !== -1 ? t.eGain + " ft gain" : "-- ft gain")
+                ),
 
-            // Stats row: badge + length + elev
-            React.createElement("div", { className: "card-stats" },
-              React.createElement("span", { className: badgeClass(t.intensity) }, intensityLabel),
-              React.createElement("span", { className: "stat-sep" }, "\u00b7"),
-              React.createElement("span", null, t.length !== -1 ? t.length + " mi" : "-- mi"),
-              React.createElement("span", { className: "stat-sep" }, "\u00b7"),
-              React.createElement("span", null, t.eGain !== -1 ? t.eGain + " ft gain" : "-- ft gain")
-            ),
+                // Access tags
+                tags.length > 0 && React.createElement("div", { className: "card-tags" },
+                  tags.map(function (tag, j) {
+                    return React.createElement("span", {
+                      key: j,
+                      className: "card-tag" + (tag.yes ? " yes" : "")
+                    }, tag.label);
+                  })
+                ),
 
-            // Access tags
-            tags.length > 0 && React.createElement("div", { className: "card-tags" },
-              tags.map(function (tag, j) {
-                return React.createElement("span", {
-                  key: j,
-                  className: "card-tag" + (tag.yes ? " yes" : "")
-                }, tag.label);
-              })
-            ),
+                // Bottom row: link + View Details
+                React.createElement("div", { className: "card-bottom" },
+                  t.infoLink
+                    ? React.createElement("a", {
+                        href: t.infoLink,
+                        target: "_blank",
+                        rel: "noreferrer"
+                      }, "Trail info")
+                    : React.createElement("span", null),
+                  React.createElement("button", {
+                    className: "view-details-btn",
+                    onClick: function (e) {
+                      e.stopPropagation();
+                      setSelectedTrail(t);
+                    }
+                  }, "View Details \u2192")
+                )
+              );
+            })
+          : // Project group cards when browsing all parks
+            projectGroups.slice(0, visibleCount).map(function (group, i) {
+              var count = group.trails.length;
 
-            // Bottom row: link + View Details
-            React.createElement("div", { className: "card-bottom" },
-              t.infoLink
-                ? React.createElement("a", {
-                    href: t.infoLink,
-                    target: "_blank",
-                    rel: "noreferrer",
-                    onClick: function (e) { e.stopPropagation(); }
-                  }, "Trail info")
-                : React.createElement("span", null),
-              React.createElement("button", {
-                className: "view-details-btn",
-                onClick: function (e) {
-                  e.stopPropagation();
-                  setSelectedTrail(t);
-                }
-              }, "View Details \u2192")
-            )
-          );
-        }),
+              // Collect unique area names
+              var areas = [];
+              group.trails.forEach(function (t) {
+                if (t.areaName && areas.indexOf(t.areaName) === -1) areas.push(t.areaName);
+              });
+              var areaText = areas.slice(0, 2).join(", ") + (areas.length > 2 ? " +" + (areas.length - 2) + " more" : "");
+
+              // Difficulty summary
+              var difficulties = {};
+              group.trails.forEach(function (t) {
+                var d = (t.intensity || "Unknown").toLowerCase();
+                difficulties[d] = true;
+              });
+              var diffList = Object.keys(difficulties);
+
+              return React.createElement(
+                "div",
+                {
+                  key: i,
+                  className: "trail-card",
+                  onClick: function () { zoomToTrail(group.trails[0]); }
+                },
+
+                // Project name
+                React.createElement("h2", null, group.projectName || "Unnamed"),
+
+                // Area names
+                React.createElement("div", { className: "card-area" }, areaText),
+
+                // Stats row: trail count + difficulty badges
+                React.createElement("div", { className: "card-stats" },
+                  React.createElement("span", {
+                    style: {
+                      padding: "1px 8px",
+                      borderRadius: "999px",
+                      backgroundColor: "#f0f7ec",
+                      color: "#2d5f2d",
+                      fontWeight: 700,
+                      fontSize: "0.72rem"
+                    }
+                  }, count + " trail" + (count !== 1 ? "s" : "")),
+                  diffList.map(function (d, j) {
+                    return React.createElement("span", {
+                      key: j,
+                      className: badgeClass(d === "unknown" ? null : d)
+                    }, d.charAt(0).toUpperCase() + d.slice(1));
+                  })
+                ),
+
+                // Bottom row: View trails button
+                React.createElement("div", { className: "card-bottom" },
+                  React.createElement("span", null),
+                  React.createElement("button", {
+                    className: "view-details-btn",
+                    onClick: function (e) {
+                      e.stopPropagation();
+                      zoomToTrail(group.trails[0]);
+                    }
+                  }, "View trails \u2192")
+                )
+              );
+            }),
 
         // Loading indicator / end of list
         visibleCount < totalTrails
