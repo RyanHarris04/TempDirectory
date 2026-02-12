@@ -678,7 +678,7 @@ function TrailDetail(props) {
 
         const symbol = {
           type: "simple-marker",
-          color: [226, 119, 40],
+          color: [45, 95, 45],
           outline: { color: [255, 255, 255], width: 1 }
         };
 
@@ -712,7 +712,7 @@ function TrailDetail(props) {
         padding: "20px 24px 24px",
         boxShadow: "0 14px 28px rgba(15,23,42,0.12)",
         border: "1px solid #e5e7eb",
-        borderTop: "4px solid #2563eb"
+        borderTop: "4px solid #2d5f2d"
       }
     },
 
@@ -791,9 +791,9 @@ function TrailDetail(props) {
           style: {
             padding: "4px 10px",
             borderRadius: "999px",
-            backgroundColor: "#e5f2ff",
+            backgroundColor: "#f0f7ec",
             fontSize: "0.8rem",
-            color: "#1f2937"
+            color: "#2d5f2d"
           }
         },
         "Length: ",
@@ -805,9 +805,9 @@ function TrailDetail(props) {
           style: {
             padding: "4px 10px",
             borderRadius: "999px",
-            backgroundColor: "#ffe8e5",
+            backgroundColor: "#fef3c7",
             fontSize: "0.8rem",
-            color: "#1f2937"
+            color: "#92400e"
           }
         },
         "Elevation: ",
@@ -819,9 +819,9 @@ function TrailDetail(props) {
           style: {
             padding: "4px 10px",
             borderRadius: "999px",
-            backgroundColor: "#e7f7e7",
+            backgroundColor: "#dcfce7",
             fontSize: "0.8rem",
-            color: "#1f2937"
+            color: "#166534"
           }
         },
         "Intensity: ",
@@ -927,7 +927,7 @@ function TrailDetail(props) {
               style: {
                 margin: "3px 0",
                 fontSize: "0.85rem",
-                color: "#2563eb"
+                color: "#2d5f2d"
               }
             },
             React.createElement(
@@ -1052,8 +1052,16 @@ function TrailDirectory() {
 
   const [eGainOp, setEGainOp] = React.useState("None");
   const [eGainValue, setEGainValue] = React.useState("");
+  const [intensityFilter, setIntensityFilter] = React.useState("All");
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [sortBy, setSortBy] = React.useState("name");
+
+  const [visibleCount, setVisibleCount] = React.useState(30);
+  const listPanelRef = React.useRef(null);
+
   const [selectedTrail, setSelectedTrail] = React.useState(null);
-    
+  const [highlightedProject, setHighlightedProject] = React.useState(null);
+
     const [isFilterModalOpen, setIsFilterModalOpen] = React.useState(false);
     const [draftStateFilter, setDraftStateFilter] = React.useState(stateFilter);
     const [draftBikingFilter, setDraftBikingFilter] = React.useState(bikingFilter);
@@ -1064,7 +1072,8 @@ function TrailDirectory() {
     const [draftLengthValue, setDraftLengthValue] = React.useState(lengthValue);
     const [draftEGainOp, setDraftEGainOp] = React.useState(eGainOp);
     const [draftEGainValue, setDraftEGainValue] = React.useState(eGainValue);
-      
+    const [draftIntensityFilter, setDraftIntensityFilter] = React.useState(intensityFilter);
+
   const openFilters = function () {
     setDraftStateFilter(stateFilter);
     setDraftBikingFilter(bikingFilter);
@@ -1076,6 +1085,7 @@ function TrailDirectory() {
     setDraftLengthValue(lengthValue);
     setDraftEGainOp(eGainOp);
     setDraftEGainValue(eGainValue);
+    setDraftIntensityFilter(intensityFilter);
 
     setIsFilterModalOpen(true);
   };
@@ -1092,6 +1102,7 @@ function TrailDirectory() {
     setLengthValue(draftLengthValue);
     setEGainOp(draftEGainOp);
     setEGainValue(draftEGainValue);
+    setIntensityFilter(draftIntensityFilter);
 
     setIsFilterModalOpen(false);
   };
@@ -1109,8 +1120,9 @@ function TrailDirectory() {
     setLengthValue("");
     setEGainOp("None");
     setEGainValue("");
+    setIntensityFilter("All");
 
-    
+
     setDraftStateFilter(defaultState);
     setDraftBikingFilter("None");
     setDraftEquestrianFilter("None");
@@ -1120,6 +1132,58 @@ function TrailDirectory() {
     setDraftLengthValue("");
     setDraftEGainOp("None");
     setDraftEGainValue("");
+    setDraftIntensityFilter("All");
+  };
+
+  // Dynamic zoom: continuous logarithmic formula, no fixed steps
+  // zoom = log2(K / spread), clamped to [6.5, 19]
+  // K=820 calibrated so spread≈0.05° → zoom 14, spread≈1° → zoom ~9.7
+  var getZoomForSpread = function (spread) {
+    if (spread <= 0) return 15;
+    var zoom = Math.log2(820 / spread);
+    return Math.max(6.5, Math.min(19, zoom));
+  };
+
+  // Zoom the map to fit an array of {lat, long} objects with consistent behavior
+  var zoomToPoints = function (coords) {
+    if (!mapRef.current || coords.length === 0) return;
+
+    var lats = coords.map(function (c) { return c.lat; });
+    var longs = coords.map(function (c) { return c.long; });
+
+    var minLat = Math.min.apply(null, lats);
+    var maxLat = Math.max.apply(null, lats);
+    var minLong = Math.min.apply(null, longs);
+    var maxLong = Math.max.apply(null, longs);
+
+    var spreadLat = maxLat - minLat;
+    var spreadLong = maxLong - minLong;
+    var spread = Math.max(spreadLat, spreadLong);
+
+    var centerLat = (minLat + maxLat) / 2;
+    var centerLong = (minLong + maxLong) / 2;
+
+    var zoom = getZoomForSpread(spread);
+
+    mapRef.current.goTo(
+      { center: [centerLong, centerLat], zoom: zoom },
+      { duration: 600, easing: "ease-in-out" }
+    );
+  };
+
+  const zoomToTrail = function (t) {
+    if (!mapRef.current) return;
+
+    // find all filtered trails with the same projectName that have valid coords
+    const siblings = filtered.filter(function (s) {
+      return s.projectName === t.projectName && s.lat !== -100 && s.long !== -200;
+    });
+
+    setHighlightedProject(t.projectName);
+
+    if (siblings.length === 0) return;
+
+    zoomToPoints(siblings);
   };
 
   const mapRef = React.useRef(null);
@@ -1166,8 +1230,57 @@ function TrailDirectory() {
     if (!matchNumber(t.length, lengthOp, lengthValue)) return false;
     if (!matchNumber(t.eGain, eGainOp, eGainValue)) return false;
 
+    // intensity filter
+    if (intensityFilter !== "All") {
+      var tIntensity = (t.intensity || "").toLowerCase();
+      var fIntensity = intensityFilter.toLowerCase();
+      if (fIntensity === "hard") {
+        if (tIntensity !== "hard" && tIntensity !== "difficult" && tIntensity !== "strenuous") return false;
+      } else {
+        if (tIntensity !== fIntensity) return false;
+      }
+    }
+
+    // search filter
+    if (searchQuery.trim() !== "") {
+      var q = searchQuery.trim().toLowerCase();
+      var nameMatch = (t.projectName || "").toLowerCase().indexOf(q) !== -1;
+      var areaMatch = (t.areaName || "").toLowerCase().indexOf(q) !== -1;
+      if (!nameMatch && !areaMatch) return false;
+    }
+
     return true;
   });
+
+  // Reset visible count when filters/sort/search change
+  React.useEffect(function () {
+    setVisibleCount(30);
+  }, [stateFilter, bikingFilter, equestrianFilter, wheelchairFilter, petsFilter,
+      lengthOp, lengthValue, eGainOp, eGainValue, intensityFilter, searchQuery,
+      sortBy, highlightedProject]);
+
+  // Infinite scroll handler on list panel
+  React.useEffect(function () {
+    var panel = listPanelRef.current;
+    if (!panel) return;
+    var onScroll = function () {
+      // load more when within 200px of bottom
+      if (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 200) {
+        setVisibleCount(function (prev) { return prev + 20; });
+      }
+    };
+    panel.addEventListener("scroll", onScroll);
+    return function () { panel.removeEventListener("scroll", onScroll); };
+  }, []);
+
+  // Wire up header search input
+  React.useEffect(function () {
+    var input = document.getElementById("header-search-input");
+    if (!input) return;
+    var handler = function (e) { setSearchQuery(e.target.value); };
+    input.addEventListener("input", handler);
+    return function () { input.removeEventListener("input", handler); };
+  }, []);
 
   // Initialize map once
   React.useEffect(() => {
@@ -1183,8 +1296,8 @@ function TrailDirectory() {
         const view = new MapView({
           container: "map",
           map: map,
-          center: [-96, 36],
-          zoom: 4
+          center: [-96, 35.5],
+          zoom: 6
         });
 
         const graphicsLayer = new GraphicsLayer();
@@ -1193,13 +1306,35 @@ function TrailDirectory() {
         graphicsLayerRef.current = graphicsLayer;
         mapRef.current = view;
 
+        // Click a marker → zoom to fit all trails for that project + filter list
+        view.on("click", function (event) {
+          view.hitTest(event).then(function (response) {
+            var hit = response.results.find(function (r) {
+              return r.graphic && r.graphic.layer === graphicsLayer;
+            });
+            if (hit) {
+              var name = hit.graphic.popupTemplate.title;
+              setHighlightedProject(name);
+
+              // collect all graphics on this layer that share the same project
+              var coords = graphicsLayer.graphics.filter(function (g) {
+                return g.popupTemplate && g.popupTemplate.title === name;
+              }).map(function (g) {
+                return { lat: g.geometry.latitude, long: g.geometry.longitude };
+              }).toArray();
+
+              zoomToPoints(coords);
+            }
+          });
+        });
+
         // Initial markers (for the initial filter)
         filtered.forEach(function (t) {
           if (t.lat !== -100 && t.long !== -200) {
             const point = { type: "point", longitude: t.long, latitude: t.lat };
             const symbol = {
               type: "simple-marker",
-              color: [226, 119, 40],
+              color: [45, 95, 45],
               outline: { color: [255, 255, 255], width: 1 }
             };
             const popupTemplate = {
@@ -1218,7 +1353,7 @@ function TrailDirectory() {
     );
   }, []);
 
-  // update markers whenever filter result changes
+  // update markers whenever filter result or highlight changes
   React.useEffect(() => {
     if (!graphicsLayerRef.current) return;
 
@@ -1228,10 +1363,12 @@ function TrailDirectory() {
       if (t.lat !== -100 && t.long !== -200) {
         require(["esri/Graphic"], function (Graphic) {
           const point = { type: "point", longitude: t.long, latitude: t.lat };
+          const isHighlighted = highlightedProject && t.projectName === highlightedProject;
           const symbol = {
             type: "simple-marker",
-            color: [226, 119, 40],
-            outline: { color: [255, 255, 255], width: 1 }
+            color: isHighlighted ? [22, 101, 52] : [45, 95, 45],
+            size: isHighlighted ? "14px" : "10px",
+            outline: { color: [255, 255, 255], width: isHighlighted ? 2 : 1 }
           };
           const popupTemplate = {
             title: t.projectName,
@@ -1246,7 +1383,7 @@ function TrailDirectory() {
         });
       }
     });
-  }, [filtered]);
+  }, [filtered, highlightedProject]);
 
   // If a trail is selected, show the detail "page"
   if (selectedTrail) {
@@ -1256,232 +1393,356 @@ function TrailDirectory() {
     });
   }
 
-  // Otherwise show the original directory view
-  return (
-    React.createElement("div", null,
-          // Small bar with a single "Filters" button
-    React.createElement("div", { className: "filters-top-bar" },
-      React.createElement("button", {
-        type: "button",
-        onClick: openFilters
-      }, "Filters")
+  // helper: intensity → badge class
+  var badgeClass = function (intensity) {
+    if (!intensity) return "badge badge-unknown";
+    var lower = intensity.toLowerCase();
+    if (lower === "easy") return "badge badge-easy";
+    if (lower === "moderate") return "badge badge-moderate";
+    if (lower === "hard" || lower === "difficult" || lower === "strenuous") return "badge badge-hard";
+    return "badge badge-unknown";
+  };
+
+  // visible trail list (applying project highlight filter)
+  var displayTrails = filtered.filter(function (t) {
+    if (!highlightedProject) return true;
+    return t.projectName === highlightedProject;
+  });
+
+  // sort
+  displayTrails = displayTrails.slice().sort(function (a, b) {
+    if (sortBy === "name") return (a.projectName || "").localeCompare(b.projectName || "");
+    if (sortBy === "length") return (b.length || 0) - (a.length || 0);
+    if (sortBy === "elevation") return (b.eGain || 0) - (a.eGain || 0);
+    return 0;
+  });
+
+  // slice for infinite scroll
+  var totalTrails = displayTrails.length;
+  var visibleTrails = displayTrails.slice(0, visibleCount);
+
+  // check if any advanced filters are active (for the "All filters" chip)
+  var hasAdvancedFilters = bikingFilter !== "None" || equestrianFilter !== "None" ||
+    wheelchairFilter !== "None" || petsFilter !== "None" ||
+    lengthOp !== "None" || eGainOp !== "None";
+
+  // Otherwise show the directory view
+  return React.createElement("div", null,
+
+    // Modal (floats above everything)
+    isFilterModalOpen && React.createElement(
+      "div",
+      { className: "modal-backdrop" },
+      React.createElement(
+        "div",
+        { className: "modal-panel" },
+
+        React.createElement("h2", null, "Filters"),
+
+        React.createElement("div", { className: "modal-filter-row" },
+          React.createElement("label", null, "State"),
+          React.createElement("select", {
+            value: draftStateFilter,
+            onChange: function (e) { setDraftStateFilter(e.target.value); }
+          },
+            React.createElement("option", null, "All"),
+            React.createElement("option", null, "TX"),
+            React.createElement("option", null, "AR"),
+            React.createElement("option", null, "OK"),
+            React.createElement("option", null, "KA")
+          )
+        ),
+
+        React.createElement("div", { className: "modal-filter-row" },
+          React.createElement("label", null, "Difficulty"),
+          React.createElement("select", {
+            value: draftIntensityFilter,
+            onChange: function (e) { setDraftIntensityFilter(e.target.value); }
+          },
+            React.createElement("option", { value: "All" }, "All"),
+            React.createElement("option", { value: "Easy" }, "Easy"),
+            React.createElement("option", { value: "Moderate" }, "Moderate"),
+            React.createElement("option", { value: "Hard" }, "Hard")
+          )
+        ),
+
+        React.createElement("div", { className: "modal-filter-row" },
+          React.createElement("label", null, "Biking"),
+          React.createElement("select", {
+            value: draftBikingFilter,
+            onChange: function (e) { setDraftBikingFilter(e.target.value); }
+          },
+            React.createElement("option", null, "None"),
+            React.createElement("option", null, "Yes"),
+            React.createElement("option", null, "No")
+          )
+        ),
+
+        React.createElement("div", { className: "modal-filter-row" },
+          React.createElement("label", null, "Equestrian"),
+          React.createElement("select", {
+            value: draftEquestrianFilter,
+            onChange: function (e) { setDraftEquestrianFilter(e.target.value); }
+          },
+            React.createElement("option", null, "None"),
+            React.createElement("option", null, "Yes"),
+            React.createElement("option", null, "No")
+          )
+        ),
+
+        React.createElement("div", { className: "modal-filter-row" },
+          React.createElement("label", null, "Wheelchair"),
+          React.createElement("select", {
+            value: draftWheelchairFilter,
+            onChange: function (e) { setDraftWheelchairFilter(e.target.value); }
+          },
+            React.createElement("option", null, "None"),
+            React.createElement("option", null, "Yes"),
+            React.createElement("option", null, "No")
+          )
+        ),
+
+        React.createElement("div", { className: "modal-filter-row" },
+          React.createElement("label", null, "Pets allowed"),
+          React.createElement("select", {
+            value: draftPetsFilter,
+            onChange: function (e) { setDraftPetsFilter(e.target.value); }
+          },
+            React.createElement("option", null, "None"),
+            React.createElement("option", null, "Yes"),
+            React.createElement("option", null, "No")
+          )
+        ),
+
+        React.createElement("div", { className: "modal-filter-row" },
+          React.createElement("label", null, "Trail length (miles)"),
+          React.createElement("div", null,
+            React.createElement("select", {
+              value: draftLengthOp,
+              onChange: function (e) { setDraftLengthOp(e.target.value); }
+            },
+              React.createElement("option", { value: "None" }, "None"),
+              React.createElement("option", { value: "<" }, "Less than"),
+              React.createElement("option", { value: ">" }, "Greater than"),
+              React.createElement("option", { value: "=" }, "Equal to")
+            ),
+            React.createElement("input", {
+              type: "number",
+              value: draftLengthValue,
+              onChange: function (e) { setDraftLengthValue(e.target.value); },
+              placeholder: "miles",
+              min: "0",
+              style: { width: "80px", marginLeft: "6px" }
+            })
+          )
+        ),
+
+        React.createElement("div", { className: "modal-filter-row" },
+          React.createElement("label", null, "Elevation gain (ft)"),
+          React.createElement("div", null,
+            React.createElement("select", {
+              value: draftEGainOp,
+              onChange: function (e) { setDraftEGainOp(e.target.value); }
+            },
+              React.createElement("option", { value: "None" }, "None"),
+              React.createElement("option", { value: "<" }, "Less than"),
+              React.createElement("option", { value: ">" }, "Greater than"),
+              React.createElement("option", { value: "=" }, "Equal to")
+            ),
+            React.createElement("input", {
+              type: "number",
+              value: draftEGainValue,
+              onChange: function (e) { setDraftEGainValue(e.target.value); },
+              placeholder: "ft",
+              min: "0",
+              style: { width: "80px", marginLeft: "6px" }
+            })
+          )
+        ),
+
+        React.createElement("div", { className: "modal-actions" },
+          React.createElement("button", {
+            type: "button",
+            className: "danger",
+            onClick: clearFilters
+          }, "Clear"),
+          React.createElement("button", {
+            type: "button",
+            onClick: function () { setIsFilterModalOpen(false); }
+          }, "Cancel"),
+          React.createElement("button", {
+            type: "button",
+            className: "primary",
+            onClick: applyFilters
+          }, "Apply")
+        )
+      )
     ),
-        
-        isFilterModalOpen && React.createElement(
+
+    // ── Side-by-side layout ──
+    React.createElement("div", { className: "app-layout" },
+
+      // LEFT: list panel
+      React.createElement("div", { className: "list-panel", ref: listPanelRef },
+
+        // Panel heading
+        React.createElement("div", { className: "panel-title" }, "Explore trails"),
+
+        // Filter chips row
+        React.createElement("div", { className: "filter-chips" },
+          // State chip
+          React.createElement("select", {
+            className: "filter-chip" + (stateFilter !== "All" ? " active" : ""),
+            value: stateFilter,
+            onChange: function (e) { setStateFilter(e.target.value); }
+          },
+            React.createElement("option", { value: "All" }, "All States"),
+            React.createElement("option", { value: "TX" }, "Texas"),
+            React.createElement("option", { value: "AR" }, "Arkansas"),
+            React.createElement("option", { value: "OK" }, "Oklahoma"),
+            React.createElement("option", { value: "KA" }, "Kansas")
+          ),
+
+          // Difficulty chip
+          React.createElement("select", {
+            className: "filter-chip" + (intensityFilter !== "All" ? " active" : ""),
+            value: intensityFilter,
+            onChange: function (e) { setIntensityFilter(e.target.value); }
+          },
+            React.createElement("option", { value: "All" }, "Difficulty"),
+            React.createElement("option", { value: "Easy" }, "Easy"),
+            React.createElement("option", { value: "Moderate" }, "Moderate"),
+            React.createElement("option", { value: "Hard" }, "Hard")
+          ),
+
+          // All filters button
+          React.createElement("button", {
+            type: "button",
+            className: "filter-chip-btn" + (hasAdvancedFilters ? " active" : ""),
+            onClick: openFilters
+          }, "\u2699 All filters")
+        ),
+
+        // "Show all" bar when a project is focused
+        highlightedProject && React.createElement(
           "div",
-          { className: "modal-backdrop" },
-          React.createElement(
-            "div",
-            { className: "modal-panel" },
-    
-            React.createElement("h2", null, "Filters"),
-    
-            
-            React.createElement("div", { className: "modal-filter-row" },
-              React.createElement("label", null, "State"),
-              React.createElement("select", {
-                value: draftStateFilter,
-                onChange: function (e) { setDraftStateFilter(e.target.value); }
-              },
-                React.createElement("option", null, "All"),
-                React.createElement("option", null, "TX"),
-                React.createElement("option", null, "AR"),
-                React.createElement("option", null, "OK"),
-                React.createElement("option", null, "KA")
-              )
-            ),
-    
-          
-            React.createElement("div", { className: "modal-filter-row" },
-              React.createElement("label", null, "Biking"),
-              React.createElement("select", {
-                value: draftBikingFilter,
-                onChange: function (e) { setDraftBikingFilter(e.target.value); }
-              },
-                React.createElement("option", null, "None"),
-                React.createElement("option", null, "Yes"),
-                React.createElement("option", null, "No")
-              )
-            ),
-    
-            
-            React.createElement("div", { className: "modal-filter-row" },
-              React.createElement("label", null, "Equestrian"),
-              React.createElement("select", {
-                value: draftEquestrianFilter,
-                onChange: function (e) { setDraftEquestrianFilter(e.target.value); }
-              },
-                React.createElement("option", null, "None"),
-                React.createElement("option", null, "Yes"),
-                React.createElement("option", null, "No")
-              )
-            ),
-    
-            
-            React.createElement("div", { className: "modal-filter-row" },
-              React.createElement("label", null, "Wheelchair"),
-              React.createElement("select", {
-                value: draftWheelchairFilter,
-                onChange: function (e) { setDraftWheelchairFilter(e.target.value); }
-              },
-                React.createElement("option", null, "None"),
-                React.createElement("option", null, "Yes"),
-                React.createElement("option", null, "No")
-              )
-            ),
-    
-           
-            React.createElement("div", { className: "modal-filter-row" },
-              React.createElement("label", null, "Pets allowed"),
-              React.createElement("select", {
-                value: draftPetsFilter,
-                onChange: function (e) { setDraftPetsFilter(e.target.value); }
-              },
-                React.createElement("option", null, "None"),
-                React.createElement("option", null, "Yes"),
-                React.createElement("option", null, "No")
-              )
-            ),
-    
-            
-            React.createElement("div", { className: "modal-filter-row" },
-              React.createElement("label", null, "Trail length (miles)"),
-              React.createElement("div", null,
-                React.createElement("select", {
-                  value: draftLengthOp,
-                  onChange: function (e) { setDraftLengthOp(e.target.value); }
-                },
-                  React.createElement("option", { value: "None" }, "None"),
-                  React.createElement("option", { value: "<" }, "Less than"),
-                  React.createElement("option", { value: ">" }, "Greater than"),
-                  React.createElement("option", { value: "=" }, "Equal to")
-                ),
-                React.createElement("input", {
-                  type: "number",
-                  value: draftLengthValue,
-                  onChange: function (e) { setDraftLengthValue(e.target.value); },
-                  placeholder: "miles",
-                  min: "0",
-                  style: { width: "80px", marginLeft: "6px" }
-                })
-              )
-            ),
-    
-           
-            React.createElement("div", { className: "modal-filter-row" },
-              React.createElement("label", null, "Elevation gain (ft)"),
-              React.createElement("div", null,
-                React.createElement("select", {
-                  value: draftEGainOp,
-                  onChange: function (e) { setDraftEGainOp(e.target.value); }
-                },
-                  React.createElement("option", { value: "None" }, "None"),
-                  React.createElement("option", { value: "<" }, "Less than"),
-                  React.createElement("option", { value: ">" }, "Greater than"),
-                  React.createElement("option", { value: "=" }, "Equal to")
-                ),
-                React.createElement("input", {
-                  type: "number",
-                  value: draftEGainValue,
-                  onChange: function (e) { setDraftEGainValue(e.target.value); },
-                  placeholder: "ft",
-                  min: "0",
-                  style: { width: "80px", marginLeft: "6px" }
-                })
-              )
-            ),
-    
-           
-            React.createElement("div", { className: "modal-actions" },
-              React.createElement("button", {
-                type: "button",
-                className: "danger",
-                onClick: clearFilters
-              }, "Clear"),
-              React.createElement("button", {
-                type: "button",
-                onClick: function () { setIsFilterModalOpen(false); }
-              }, "Cancel"),
-              React.createElement("button", {
-                type: "button",
-                className: "primary",
-                onClick: applyFilters
-              }, "Apply")
+          { className: "show-all-bar" },
+          React.createElement("span", null,
+            "Showing: ",
+            React.createElement("strong", null, highlightedProject)
+          ),
+          React.createElement("button", {
+            type: "button",
+            onClick: function () {
+              setHighlightedProject(null);
+              if (mapRef.current) {
+                mapRef.current.goTo(
+                  { center: [-96, 35.5], zoom: 6 },
+                  { duration: 800, easing: "ease-in-out" }
+                );
+              }
+            }
+          }, "Show all")
+        ),
+
+        // Trail count + sort row
+        React.createElement("div", { className: "trail-meta-row" },
+          React.createElement("div", { className: "trail-count" },
+            totalTrails + " trail" + (totalTrails !== 1 ? "s" : "")
+          ),
+          React.createElement("div", { className: "trail-sort" },
+            React.createElement("select", {
+              value: sortBy,
+              onChange: function (e) { setSortBy(e.target.value); }
+            },
+              React.createElement("option", { value: "name" }, "Name"),
+              React.createElement("option", { value: "length" }, "Length"),
+              React.createElement("option", { value: "elevation" }, "Elevation")
             )
           )
         ),
-    
 
-      React.createElement("div", { id: "map" }),
+        // ── Trail cards ──
+        visibleTrails.map(function (t, i) {
+          var isHL = highlightedProject && t.projectName === highlightedProject;
+          var intensityLabel = t.intensity || "Unknown";
 
-     
-      filtered.map(function (t, i) {
-        return React.createElement(
-          "div",
-          {
-            key: i,
-            className: "trail-card",
-            onClick: function () { setSelectedTrail(t); }  // click tile to open detail page
-          },
+          // build access tags
+          var tags = [];
+          if (t.isWalking === "Yes") tags.push({ label: "Walking", yes: true });
+          if (t.isBiking === "Yes") tags.push({ label: "Biking", yes: true });
+          if (t.isEquestrian === "Yes") tags.push({ label: "Equestrian", yes: true });
+          if (t.isWheelchair === "Yes") tags.push({ label: "Wheelchair", yes: true });
+          if (t.isPet === "Yes") tags.push({ label: "Pets", yes: true });
 
-          // Title + area
-          React.createElement("h2", null, t.projectName || "Unnamed Trail"),
-          React.createElement(
-            "p",
-            { style: { marginBottom: "4px", fontSize: "0.8rem", color: "#6b7280" } },
-            t.areaName || "N/A"
-          ),
+          return React.createElement(
+            "div",
+            {
+              key: i,
+              className: "trail-card" + (isHL ? " highlighted" : ""),
+              onClick: function () { zoomToTrail(t); }
+            },
 
-          // Quick stats row
-          React.createElement(
-            "p",
-            null,
-            React.createElement("strong", null, "Length: "),
-            t.length !== -1 ? t.length + " mi" : "Unknown",
-            "  •  ",
-            React.createElement("strong", null, "Elev: "),
-            t.eGain !== -1 ? t.eGain + " ft" : "Unknown",
-            "  •  ",
-            React.createElement("strong", null, "Intensity: "),
-            t.intensity || "Unknown"
-          ),
+            // Title
+            React.createElement("h2", null, t.projectName || "Unnamed Trail"),
 
-          // Access flags
-          React.createElement(
-            "p",
-            null,
-            React.createElement("strong", null, "Access: "),
-            "Walk ",
-            t.isWalking || "Unknown",
-            "  ·  Bike ",
-            t.isBiking || "Unknown",
-            "  ·  Eq ",
-            t.isEquestrian || "Unknown",
-            "  ·  Wheelchair ",
-            t.isWheelchair || "Unknown",
-            "  ·  Pets ",
-            t.isPet || "Unknown"
-          ),
+            // Area
+            React.createElement("div", { className: "card-area" }, t.areaName || ""),
 
-          // Links / comments
-          t.infoLink &&
-            React.createElement(
-              "p",
-              null,
-              React.createElement(
-                "a",
-                { href: t.infoLink, target: "_blank", rel: "noreferrer" },
-                "Trail website"
-              )
+            // Stats row: badge + length + elev
+            React.createElement("div", { className: "card-stats" },
+              React.createElement("span", { className: badgeClass(t.intensity) }, intensityLabel),
+              React.createElement("span", { className: "stat-sep" }, "\u00b7"),
+              React.createElement("span", null, t.length !== -1 ? t.length + " mi" : "-- mi"),
+              React.createElement("span", { className: "stat-sep" }, "\u00b7"),
+              React.createElement("span", null, t.eGain !== -1 ? t.eGain + " ft gain" : "-- ft gain")
             ),
-          t.comments &&
-            React.createElement(
-              "p",
-              { style: { fontStyle: "italic" } },
-              t.comments
+
+            // Access tags
+            tags.length > 0 && React.createElement("div", { className: "card-tags" },
+              tags.map(function (tag, j) {
+                return React.createElement("span", {
+                  key: j,
+                  className: "card-tag" + (tag.yes ? " yes" : "")
+                }, tag.label);
+              })
+            ),
+
+            // Bottom row: link + View Details
+            React.createElement("div", { className: "card-bottom" },
+              t.infoLink
+                ? React.createElement("a", {
+                    href: t.infoLink,
+                    target: "_blank",
+                    rel: "noreferrer",
+                    onClick: function (e) { e.stopPropagation(); }
+                  }, "Trail info")
+                : React.createElement("span", null),
+              React.createElement("button", {
+                className: "view-details-btn",
+                onClick: function (e) {
+                  e.stopPropagation();
+                  setSelectedTrail(t);
+                }
+              }, "View Details \u2192")
             )
-        );
-      })
+          );
+        }),
+
+        // Loading indicator / end of list
+        visibleCount < totalTrails
+          ? React.createElement("div", {
+              style: { textAlign: "center", padding: "12px", color: "#6b7280", fontSize: "0.8rem" }
+            }, "Scroll for more...")
+          : totalTrails > 0 && React.createElement("div", {
+              style: { textAlign: "center", padding: "12px", color: "#d1d5db", fontSize: "0.75rem" }
+            }, "End of list")
+      ),
+
+      // RIGHT: map
+      React.createElement("div", { className: "map-layer" },
+        React.createElement("div", { id: "map" })
+      )
     )
   );
 }
