@@ -1705,7 +1705,7 @@ function TrailDirectory(props) {
       )
     ),
 
-    // ── Side-by-side layout ──
+    // ── Side-by side layout ──
     React.createElement("div", { className: "app-layout" },
 
       
