@@ -1040,13 +1040,15 @@ function TrailDetail(props) {
 
 
 // ───────────────────────────────── TrailDirectory (existing list + big map) ─────────────────────────────────
-function TrailDirectory() {
+function TrailDirectory(props) {
   const [stateFilter, setStateFilter] = React.useState("All");
   const [bikingFilter, setBikingFilter] = React.useState("None");
   const [equestrianFilter, setEquestrianFilter] = React.useState("None");
   const [wheelchairFilter, setWheelchairFilter] = React.useState("None");
   const [petsFilter, setPetsFilter] = React.useState("None");
-
+  const userLoc = props.userLoc;
+  const radius = props.radius;
+  const useLocationFilter = props.useLocationFilter;
   const [lengthOp, setLengthOp] = React.useState("None");
   const [lengthValue, setLengthValue] = React.useState("");
 
@@ -1191,12 +1193,18 @@ function TrailDirectory() {
 
   const filtered = trails.filter(t => {
     let stateMatch = false;
+    if (useLocationFilter && userLoc) {
+      if (t.lat === -100 || t.long === -200) return false;
+      if (distanceMiles(userLoc.lat, userLoc.long, t.lat, t.long) > radius) return false;
+    }
+    
     if (stateFilter === "All") stateMatch = true;
     else if (stateFilter === "TX" && trailData.TX.includes(t)) stateMatch = true;
     else if (stateFilter === "AR" && trailData.AR.includes(t)) stateMatch = true;
     else if (stateFilter === "OK" && trailData.OK.includes(t)) stateMatch = true;
     else if (stateFilter === "KA" && trailData.KA.includes(t)) stateMatch = true;
-
+    
+    
     if (!stateMatch) return false;
 
     const matchYesNo = (value, filter) => {
@@ -1369,7 +1377,19 @@ function TrailDirectory() {
         });
       }
     );
+
+    
   }, []);
+
+  React.useEffect(function () {
+    if (!userLoc) return;
+    if (!mapRef.current) return;
+  
+    mapRef.current.goTo(
+      { center: [userLoc.long, userLoc.lat], zoom: 9 },
+      { duration: 600, easing: "ease-in-out" }
+    );
+  }, [userLoc]);
 
   // update markers whenever filter result or highlight changes
   React.useEffect(() => {
@@ -1688,9 +1708,26 @@ function TrailDirectory() {
     // ── Side-by-side layout ──
     React.createElement("div", { className: "app-layout" },
 
-      // LEFT: list panel
+      
       React.createElement("div", { className: "list-panel", ref: listPanelRef },
 
+        props.onBackToLanding && React.createElement(
+          "button",
+          {
+            style: {
+              marginBottom: "10px",
+              padding: "6px 14px",
+              borderRadius: "999px",
+              border: "1px solid #d1d5db",
+              background: "#f3f4f6",
+              cursor: "pointer",
+              fontSize: "0.8rem"
+            },
+            onClick: props.onBackToLanding
+          },
+          "← Back to Home"
+        ),
+        
         // Panel heading
         React.createElement("div", { className: "panel-title" }, "Explore trails"),
 
@@ -1855,7 +1892,11 @@ function TrailDirectory() {
                 {
                   key: i,
                   className: "trail-card",
-                  onClick: function () { zoomToTrail(group.trails[0]); }
+                  onClick: function () {
+                    setHighlightedProject(group.projectName);                          
+                    zoomToTrail(group.trails[0]);              
+                  }
+                  
                 },
 
                 // Project name
@@ -1891,8 +1932,10 @@ function TrailDirectory() {
                     className: "view-details-btn",
                     onClick: function (e) {
                       e.stopPropagation();
-                      zoomToTrail(group.trails[0]);
+                      setHighlightedProject(group.projectName);                           
+                      zoomToTrail(group.trails[0]);               
                     }
+                    
                   }, "View trails \u2192")
                 )
               );
@@ -1916,8 +1959,295 @@ function TrailDirectory() {
   );
 }
 
-// Use ReactDOM.render for UMD React
+const RADIUS_OPTIONS = [10, 50, 100, 200, 300, 500, 1000];
+const DEFAULT_RADIUS = 100;
+
+const distanceMiles = function (lat1, lon1, lat2, lon2) {
+  const toRad = x => (x * Math.PI) / 180;
+  const R = 3958.8;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
+
+function LandingPage(props) {
+  const mapDivRef = React.useRef(null);
+  const viewRef = React.useRef(null);
+  const graphicsLayerRef = React.useRef(null);
+
+  
+  React.useEffect(function () {
+    if (!mapDivRef.current) return;
+
+    require(
+      ["esri/Map", "esri/views/MapView", "esri/layers/GraphicsLayer"],
+      function (Map, MapView, GraphicsLayer) {
+        const map = new Map({ basemap: "topo-vector" });
+
+        const view = new MapView({
+          container: mapDivRef.current,
+          map: map,
+          center: [-96, 35.5],
+          zoom: 6
+        });
+
+        const gl = new GraphicsLayer();
+        map.add(gl);
+
+        viewRef.current = view;
+        graphicsLayerRef.current = gl;
+      }
+    );
+
+    
+    return function () {
+      if (viewRef.current) {
+        viewRef.current.destroy();
+        viewRef.current = null;
+      }
+      graphicsLayerRef.current = null;
+    };
+  }, []);
+
+  
+  React.useEffect(function () {
+    if (!props.userLoc) return;
+    if (!viewRef.current || !graphicsLayerRef.current) return;
+
+    const user = props.userLoc;
+    const radiusMiles = props.radius || 100;
+    const nearbyList = Array.isArray(props.nearbyTrails) ? props.nearbyTrails : [];
+    require(["esri/Graphic", "esri/geometry/Circle"], function (Graphic, Circle) {
+      const gl = graphicsLayerRef.current;
+      gl.removeAll();
+
+     
+      const circle = new Circle({
+        center: [user.long, user.lat],
+        radius: radiusMiles,
+        radiusUnit: "miles"
+      });
+
+      gl.add(
+        new Graphic({
+          geometry: circle,
+          symbol: {
+            type: "simple-fill",
+            color: [45, 95, 45, 0.08],
+            outline: { color: [45, 95, 45, 0.6], width: 2 }
+          }
+        })
+      );
+
+      
+      gl.add(
+        new Graphic({
+          geometry: { type: "point", longitude: user.long, latitude: user.lat },
+          symbol: {
+            type: "simple-marker",
+            color: [37, 99, 235],
+            size: "12px",
+            outline: { color: [255, 255, 255], width: 2 }
+          },
+          popupTemplate: { title: "You are here", content: "Current location" }
+        })
+      );
+
+      
+      const groups = {};
+      nearbyList.forEach(function (t) {
+        if (!groups[t.projectName]) groups[t.projectName] = [];
+        groups[t.projectName].push(t);
+      });
+
+      Object.keys(groups).forEach(function (name) {
+        const arr = groups[name];
+        const count = arr.length;
+
+        
+        const avgLat = arr.reduce((s, x) => s + x.lat, 0) / count;
+        const avgLong = arr.reduce((s, x) => s + x.long, 0) / count;
+
+        gl.add(
+          new Graphic({
+            geometry: { type: "point", longitude: avgLong, latitude: avgLat },
+            symbol: {
+              type: "simple-marker",
+              color: [45, 95, 45],
+              size: count > 1 ? "18px" : "12px",
+              outline: { color: [255, 255, 255], width: 2 }
+            },
+            popupTemplate: {
+              title: name || "Unnamed",
+              content: count + " trail" + (count !== 1 ? "s" : "")
+            }
+          })
+        );
+
+        if (count > 1) {
+          gl.add(
+            new Graphic({
+              geometry: { type: "point", longitude: avgLong, latitude: avgLat },
+              symbol: {
+                type: "text",
+                text: String(count),
+                color: [255, 255, 255],
+                font: { size: 10, weight: "bold" },
+                horizontalAlignment: "center",
+                verticalAlignment: "middle"
+              },
+              popupTemplate: {
+                title: name || "Unnamed",
+                content: count + " trail" + (count !== 1 ? "s" : "")
+              }
+            })
+          );
+        }
+      });
+
+      
+      viewRef.current.goTo(circle.extent.expand(1.15), { duration: 600 });
+    });
+  }, [props.userLoc, props.radius, props.nearbyTrails]);
+
+  return React.createElement(
+    "div",
+    { className: "landing-wrap" },
+    React.createElement(
+      "div",
+      { className: "landing-card" },
+
+      React.createElement("h2", { className: "landing-title" }, "Welcome to USACE Tulsa District Trails"),
+      React.createElement(
+        "p",
+        { className: "landing-sub" },
+        "Discover parks and trailheads across Texas, Oklahoma, Arkansas, and Kansas."
+      ),
+
+      React.createElement("div", { className: "landing-actions" },
+        React.createElement("button",
+          { className: "btn-primary", onClick: props.onEnter },
+          "Open Trail Directory"
+        ),
+        React.createElement("button",
+          { className: "btn-secondary", onClick: props.onRequestLocation },
+          props.userLoc ? "Location enabled ✓" : "Use My Location"
+        )
+      ),
+
+      React.createElement("h3", null, "Trails near you"),
+
+      React.createElement("div", { style: { marginBottom: "8px" } },
+        "Within ",
+        React.createElement("select", {
+          value: props.radius,
+          onChange: function (e) { props.onRadiusChange(Number(e.target.value)); }
+        },
+          RADIUS_OPTIONS.map(function (r) {
+            return React.createElement("option", { key: r, value: r }, r + " miles");
+          })
+        )
+      ),
+
+      
+      React.createElement("div", { className: "landing-map", ref: mapDivRef }),
+
+    
+      React.createElement("div", { className: "nearby-grid" },
+        props.nearbyGroups.slice(0, 6).map(function (g, i) {
+          return React.createElement(
+            "div",
+            { key: i, className: "nearby-item" },
+            React.createElement("strong", null, g.projectName),
+            React.createElement(
+              "div",
+              null,
+              g.count + " trail" + (g.count !== 1 ? "s" : ""),
+              " • closest ~", Math.round(g.closestMiles), " mi"
+            )
+          );
+        })
+      )
+    )
+  );
+}
+
+
+function App() {
+  const [page, setPage] = React.useState("landing");
+  const [userLoc, setUserLoc] = React.useState(null);
+  const [radius, setRadius] = React.useState(DEFAULT_RADIUS);
+
+  const requestLocation = function () {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        setUserLoc({ lat: pos.coords.latitude, long: pos.coords.longitude });
+      },
+      function () {
+        setUserLoc(null);
+      }
+    );
+  };
+
+ 
+  var nearby = [];
+  var nearbyGroups = [];
+
+  if (userLoc) {
+    nearby = trails.filter(function (t) {
+      if (t.lat === -100 || t.long === -200) return false;
+      return distanceMiles(userLoc.lat, userLoc.long, t.lat, t.long) <= radius;
+    });
+
+    var map = {};
+    nearby.forEach(function (t) {
+      if (!map[t.projectName]) {
+        map[t.projectName] = { projectName: t.projectName, count: 0, closestMiles: 1e9 };
+      }
+      map[t.projectName].count++;
+      var d = distanceMiles(userLoc.lat, userLoc.long, t.lat, t.long);
+      if (d < map[t.projectName].closestMiles) map[t.projectName].closestMiles = d;
+    });
+
+    nearbyGroups = Object.values(map).sort(function (a, b) {
+      return a.closestMiles - b.closestMiles;
+    });
+  }
+
+  
+  React.useEffect(function () {
+    var box = document.querySelector(".header-search");
+    if (!box) return;
+    box.style.display = page === "landing" ? "none" : "block";
+  }, [page]);
+
+  if (page === "landing") {
+    return React.createElement(LandingPage, {
+      onEnter: function () { setPage("directory"); },
+      onRequestLocation: requestLocation,
+      userLoc: userLoc,
+      radius: radius,
+      onRadiusChange: setRadius,
+      nearbyGroups: nearbyGroups,
+      nearbyTrails: nearby
+    });
+  }
+
+  return React.createElement(TrailDirectory, {
+    userLoc: userLoc,
+    radius: radius,
+    useLocationFilter: false,
+    onBackToLanding: () => setPage("landing")
+  });
+}
+
 ReactDOM.render(
-  React.createElement(TrailDirectory, null),
+  React.createElement(App,null),
   document.getElementById("root")
 );
