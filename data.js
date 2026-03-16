@@ -4508,7 +4508,7 @@ var trailData = {
     "length": 1,
     "eGain": -1,
     "intensity": "",
-    "infoLink": "",
+    "infoLink": "https://www.swt.usace.army.mil/Locations/Tulsa-District-Lakes/Oklahoma/Keystone-Lake/Washington-Irving-South/",
     "comments": ""
   },
   {
@@ -4627,7 +4627,7 @@ var trailData = {
     "length": 5,
     "eGain": -1,
     "intensity": "",
-    "infoLink": "",
+    "infoLink": "https://www.swt.usace.army.mil/Locations/Tulsa-District-Lakes/Oklahoma/Keystone-Lake/Whitewater/",
     "comments": ""
   },
   {
@@ -4848,7 +4848,7 @@ var trailData = {
     "length": -1,
     "eGain": -1,
     "intensity": "",
-    "infoLink": "",
+    "infoLink": "https://www.swt.usace.army.mil/Locations/Tulsa-District-Lakes/Oklahoma/Keystone-Lake/Appalachia-Bay/",
     "comments": ""
   },
   {
@@ -5664,7 +5664,7 @@ var trailData = {
     "length": 0.12,
     "eGain": -1,
     "intensity": "Easy",
-    "infoLink": "",
+    "infoLink": "https://www.swt.usace.army.mil/Locations/Tulsa-District-Lakes/Oklahoma/Skiatook-Lake/Tall-Chief-Cove/",
     "comments": ""
   },
   {
@@ -5800,7 +5800,7 @@ var trailData = {
     "length": 1.8,
     "eGain": -1,
     "intensity": "Moderate",
-    "infoLink": "",
+    "infoLink": "https://www.swt.usace.army.mil/Locations/Tulsa-District-Lakes/Oklahoma/Skiatook-Lake/Osage-Park/",
     "comments": ""
   },
   {
